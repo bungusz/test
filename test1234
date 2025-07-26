@@ -3409,7 +3409,18 @@ function tab:CreateConfigSystem(side)
     configSystem.sector = tab:CreateSector("Configs", side or "left")
 
     local ConfigName = configSystem.sector:AddTextbox("Config Name", "", ConfigName, function() end, "")
-    local default = tostring(listfiles(configSystem.configFolder)[1] or ""):gsub(configSystem.configFolder .. "\\", ""):gsub(".txt", "")
+
+    local function listConfigNames()
+        local names = {}
+        for _, v in ipairs(listfiles(configSystem.configFolder)) do
+            if v:find("%.txt$") and not v:find("_autoload") then
+                table.insert(names, v:match("([^\\]+)%.txt$"))
+            end
+        end
+        return names
+    end
+
+    local default = listConfigNames()[1] or ""
 
     local Config = configSystem.sector:AddDropdown("Configs", {}, default, false, function() end, "")
     local AutoLoadConfig = configSystem.sector:AddDropdown("Auto-Load Config", {}, default, false, function(selection)
@@ -3418,24 +3429,28 @@ function tab:CreateConfigSystem(side)
         end
     end, "")
 
-    for _,v in ipairs(listfiles(configSystem.configFolder)) do
-        if v:find(".txt") and not v:find("_autoload") then
-            local name = v:gsub(configSystem.configFolder .. "\\", ""):gsub(".txt", "")
-            Config:Add(name)
-            AutoLoadConfig:Add(name)
+    configSystem.SetAutoLoad = configSystem.sector:AddButton("Set Auto-Load", function()
+        local selected = Config:Get()
+        if selected and selected ~= "" then
+            writefile(AutoLoadFile, selected)
         end
+    end)
+
+    for _, name in ipairs(listConfigNames()) do
+        Config:Add(name)
+        AutoLoadConfig:Add(name)
     end
 
     configSystem.Create = configSystem.sector:AddButton("Create", function()
-        for _,v in ipairs(listfiles(configSystem.configFolder)) do
-            local name = v:gsub(configSystem.configFolder .. "\\", ""):gsub(".txt", "")
+        for _, name in ipairs(listConfigNames()) do
             Config:Remove(name)
             AutoLoadConfig:Remove(name)
         end
 
-        if ConfigName:Get() and ConfigName:Get() ~= "" then
+        local newName = ConfigName:Get()
+        if newName and newName ~= "" then
             local config = {}
-            for i,v in pairs(library.flags) do
+            for i, v in pairs(library.flags) do
                 if v ~= nil and v ~= "" then
                     if typeof(v) == "Color3" then
                         config[i] = {v.R, v.G, v.B}
@@ -3448,22 +3463,20 @@ function tab:CreateConfigSystem(side)
                     end
                 end
             end
-            writefile(configSystem.configFolder .. "/" .. ConfigName:Get() .. ".txt", httpservice:JSONEncode(config))
+            writefile(configSystem.configFolder .. "/" .. newName .. ".txt", httpservice:JSONEncode(config))
 
-            for _,v in ipairs(listfiles(configSystem.configFolder)) do
-                if v:find(".txt") and not v:find("_autoload") then
-                    local name = v:gsub(configSystem.configFolder .. "\\", ""):gsub(".txt", "")
-                    Config:Add(name)
-                    AutoLoadConfig:Add(name)
-                end
+            for _, name in ipairs(listConfigNames()) do
+                Config:Add(name)
+                AutoLoadConfig:Add(name)
             end
         end
     end)
 
     configSystem.Save = configSystem.sector:AddButton("Save", function()
         local config = {}
-        if Config:Get() and Config:Get() ~= "" then
-            for i,v in pairs(library.flags) do
+        local name = Config:Get()
+        if name and name ~= "" then
+            for i, v in pairs(library.flags) do
                 if v ~= nil and v ~= "" then
                     if typeof(v) == "Color3" then
                         config[i] = {v.R, v.G, v.B}
@@ -3476,18 +3489,19 @@ function tab:CreateConfigSystem(side)
                     end
                 end
             end
-            writefile(configSystem.configFolder .. "/" .. Config:Get() .. ".txt", httpservice:JSONEncode(config))
+            writefile(configSystem.configFolder .. "/" .. name .. ".txt", httpservice:JSONEncode(config))
         end
     end)
 
     configSystem.Load = configSystem.sector:AddButton("Load", function()
-        local Success = pcall(readfile, configSystem.configFolder .. "/" .. Config:Get() .. ".txt")
-        if Success then
+        local name = Config:Get()
+        local path = configSystem.configFolder .. "/" .. name .. ".txt"
+        if isfile(path) then
             pcall(function()
-                local ReadConfig = httpservice:JSONDecode(readfile(configSystem.configFolder .. "/" .. Config:Get() .. ".txt"))
+                local ReadConfig = httpservice:JSONDecode(readfile(path))
                 local NewConfig = {}
 
-                for i,v in pairs(ReadConfig) do
+                for i, v in pairs(ReadConfig) do
                     if typeof(v) == "table" then
                         if typeof(v[1]) == "number" then
                             NewConfig[i] = Color3.new(v[1], v[2], v[3])
@@ -3503,8 +3517,8 @@ function tab:CreateConfigSystem(side)
 
                 library.flags = NewConfig
 
-                for i,v in pairs(library.flags) do
-                    for _,v2 in pairs(library.items) do
+                for i, v in pairs(library.flags) do
+                    for _, v2 in pairs(library.items) do
                         if i and i ~= "" and i ~= "Configs_Name" and i ~= "Configs" and v2.flag then
                             if v2.flag == i then
                                 pcall(function()
@@ -3519,23 +3533,22 @@ function tab:CreateConfigSystem(side)
     end)
 
     configSystem.Delete = configSystem.sector:AddButton("Delete", function()
-        for _,v in ipairs(listfiles(configSystem.configFolder)) do
-            local name = v:gsub(configSystem.configFolder .. "\\", ""):gsub(".txt", "")
+        for _, name in ipairs(listConfigNames()) do
             Config:Remove(name)
             AutoLoadConfig:Remove(name)
         end
 
-        if not Config:Get() or Config:Get() == "" then return end
-        local path = configSystem.configFolder .. "/" .. Config:Get() .. ".txt"
-        if not isfile(path) then return end
-        delfile(path)
-
-        for _,v in ipairs(listfiles(configSystem.configFolder)) do
-            if v:find(".txt") and not v:find("_autoload") then
-                local name = v:gsub(configSystem.configFolder .. "\\", ""):gsub(".txt", "")
-                Config:Add(name)
-                AutoLoadConfig:Add(name)
+        local name = Config:Get()
+        if name and name ~= "" then
+            local path = configSystem.configFolder .. "/" .. name .. ".txt"
+            if isfile(path) then
+                delfile(path)
             end
+        end
+
+        for _, name in ipairs(listConfigNames()) do
+            Config:Add(name)
+            AutoLoadConfig:Add(name)
         end
     end)
 
@@ -3547,7 +3560,7 @@ function tab:CreateConfigSystem(side)
                 local ReadConfig = httpservice:JSONDecode(readfile(path))
                 local NewConfig = {}
 
-                for i,v in pairs(ReadConfig) do
+                for i, v in pairs(ReadConfig) do
                     if typeof(v) == "table" then
                         if typeof(v[1]) == "number" then
                             NewConfig[i] = Color3.new(v[1], v[2], v[3])
@@ -3563,8 +3576,8 @@ function tab:CreateConfigSystem(side)
 
                 library.flags = NewConfig
 
-                for i,v in pairs(library.flags) do
-                    for _,v2 in pairs(library.items) do
+                for i, v in pairs(library.flags) do
+                    for _, v2 in pairs(library.items) do
                         if i and i ~= "" and i ~= "Configs_Name" and i ~= "Configs" and v2.flag then
                             if v2.flag == i then
                                 pcall(function()
