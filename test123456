@@ -3567,21 +3567,6 @@ function library:CreateWindow(name, size, hidebutton)
 	        end
 	    end)
 
-		configSystem.UIBindToggle = configSystem.sector:AddToggle("UI Bind", true, function(state)
-		    if Window and Window.Frame then
-		        Window.Frame.Visible = state
-		    end
-		end)
-		
-		configSystem.UIBindToggle:AddKeybind(Window.hidebutton, function()
-		    if Window and Window.Frame then
-		        local newState = not Window.Frame.Visible
-		        Window.Frame.Visible = newState
-		        configSystem.UIBindToggle:SetState(newState)
-		    end
-		end)
-
-	
 	    return configSystem
 	end
 
